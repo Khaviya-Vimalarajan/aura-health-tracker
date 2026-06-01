@@ -1,0 +1,21 @@
+{
+  "name": "aura-health-tracker",
+  "version": "1.0.0",
+  "description": "Glowing health tracker for energy &amp; habits",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/khaviya-Vimalarajan/aura-health-tracker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/khaviya-Vimalarajan/aura-health-tracker/issues"
+  },
+  "homepage": "https://github.com/khaviya-Vimalarajan/aura-health-tracker#readme"
+}
