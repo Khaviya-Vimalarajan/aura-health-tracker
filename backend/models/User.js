@@ -12,6 +12,14 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     trim: true,
+    validate: {
+      validator: function(email) {
+        // Email format validation: must contain @ and . 
+        const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+        return emailRegex.test(email);
+      },
+      message: 'Please enter a valid email address (example@domain.com)'
+    }
   },
   password: {
     type: String,

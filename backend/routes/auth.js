@@ -5,10 +5,23 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
+// Email format validation function
+const isValidEmail = (email) => {
+  const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 // Register
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+     // Validate email format
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ 
+        message: 'Please enter a valid email address (example@domain.com)' 
+      });
+    }
 
     // Check if user exists
     const existingUser = await User.findOne({ email });
@@ -51,6 +64,13 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+
+     // Validate email format
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ 
+        message: 'Please enter a valid email address (example@domain.com)' 
+      });
+    }
 
     // Find user
     const user = await User.findOne({ email });

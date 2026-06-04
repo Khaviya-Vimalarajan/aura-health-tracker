@@ -1,0 +1,229 @@
+import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useNavigate, Link } from 'react-router-dom';
+import { Activity, User, Mail, Lock, Sun, Moon, CheckCircle, AlertCircle } from 'lucide-react';
+
+export default function Register() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const { register } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
+  const navigate = useNavigate();
+
+  // Email format validation function
+  const validateEmailFormat = (email) => {
+    if (!email) {
+      setEmailError('');
+      return false;
+    }
+    // Regex: must contain @ and . with proper format
+    const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEmailError('Enter a valid email (e.g., name@domain.com)');
+      return false;
+    }
+    setEmailError('');
+    return true;
+  };
+
+  const handleEmailChange = (e) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    validateEmailFormat(newEmail);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    
+    // Validate email format before submitting
+    if (!validateEmailFormat(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      await register(name, email, password);
+      setSuccess('Account created successfully! ');
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 1500);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="max-w-md w-full space-y-8 bg-white dark:bg-gray-800 rounded-2xl p-6 sm:p-8 shadow-2xl animate-slide-up">
+        
+        {/* Theme Toggle */}
+        <div className="flex justify-end">
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            aria-label="Toggle theme"
+          >
+            {darkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-gray-700" />}
+          </button>
+        </div>
+
+        {/* Logo & Title */}
+        <div className="text-center">
+          <div className="mx-auto w-20 h-20 glow-orb flex items-center justify-center">
+            <Activity className="w-10 h-10 text-white" />
+          </div>
+          <h2 className="mt-6 text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white">
+            Create Account
+          </h2>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            Enter a valid email address
+          </p>
+        </div>
+        
+        {/* Form */}
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-500 rounded-lg p-3 text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="bg-green-50 dark:bg-green-900/30 border border-green-500 rounded-lg p-3 text-green-600 dark:text-green-400 text-sm flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              {success}
+            </div>
+          )}
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="input pl-10"
+                  placeholder="John Doe"
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={handleEmailChange}
+                  className={`input pl-10 ${emailError ? 'border-red-500 focus:ring-red-500' : ''}`}
+                  placeholder="name@example.com"
+                  required
+                  disabled={loading}
+                />
+              </div>
+              {emailError && (
+                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  {emailError}
+                </p>
+              )}
+              {email && !emailError && (
+                <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Valid email format
+                </p>
+              )}
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input pl-10"
+                  placeholder="•••••••• (min 6 characters)"
+                  required
+                  disabled={loading}
+                />
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Must be at least 6 characters
+              </p>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input pl-10"
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          </div>
+
+          <button 
+            type="submit" 
+            className="btn-primary"
+            disabled={loading || !!emailError}
+          >
+            {loading ? 'Creating account...' : 'Sign Up'}
+          </button>
+          
+          <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+            Already have an account?{' '}
+            <Link to="/login" className="text-[#10B981] hover:text-[#059669] font-semibold transition-colors">
+              Sign in
+            </Link>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
