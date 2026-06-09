@@ -16,6 +16,7 @@ import LogModal from '../components/LogModal';
 import CoachDrawer from '../components/CoachDrawer';
 import SettingsModal from '../components/SettingsModal';
 import { generateWeeklyPDF } from '../utils/pdfGenerator';
+import BadgesCard from '../components/BadgesCard';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -417,53 +418,59 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Third Section: Insights Engine & 7-Day Chart */}
+        {/* Third Section: Insights Engine, Achievements & 7-Day Chart */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Insights Panel */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-500" />
-                  Aura Insights
-                </h3>
-              </div>
-              
-              <div className="space-y-3">
-                {insightsData.status === 'collecting' ? (
-                  <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl text-center">
-                    <span className="text-2xl block mb-1">⏳</span>
-                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Correlation Engine Booting</p>
-                    <p className="text-[10px] text-gray-500 mt-1">{insightsData.message}</p>
-                  </div>
-                ) : (
-                  insightsData.insights.map((insight, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`p-3 border rounded-2xl text-xs flex gap-2.5 items-start ${
-                        insight.impact === 'positive'
-                          ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-800 dark:text-emerald-400'
-                          : 'bg-gray-50 border-gray-200 dark:bg-gray-850 dark:border-gray-800 text-gray-700 dark:text-gray-400'
-                      }`}
-                    >
-                      <span className="text-base flex-shrink-0">💡</span>
-                      <p className="leading-relaxed font-semibold">{insight.text}</p>
+          {/* Left Column: Insights & Achievements */}
+          <div className="space-y-6 flex flex-col justify-between">
+            {/* Insights Panel */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex-1 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-500" />
+                    Aura Insights
+                  </h3>
+                </div>
+                
+                <div className="space-y-3">
+                  {insightsData.status === 'collecting' ? (
+                    <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl text-center">
+                      <span className="text-2xl block mb-1">⏳</span>
+                      <p className="text-xs font-bold text-gray-700 dark:text-gray-300">Correlation Engine Booting</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{insightsData.message}</p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    insightsData.insights.map((insight, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`p-3 border rounded-2xl text-xs flex gap-2.5 items-start ${
+                          insight.impact === 'positive'
+                            ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-800 dark:text-emerald-400'
+                            : 'bg-gray-50 border-gray-200 dark:bg-gray-850 dark:border-gray-800 text-gray-700 dark:text-gray-400'
+                        }`}
+                      >
+                        <span className="text-base flex-shrink-0">💡</span>
+                        <p className="leading-relaxed font-semibold">{insight.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile / Inline coach button */}
+              <div className="pt-6 mt-6 border-t border-gray-50 dark:border-gray-850 sm:hidden">
+                <button
+                  onClick={handleCoachClick}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs transition-colors shadow-md"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Talk to AI Coach
+                </button>
               </div>
             </div>
 
-            {/* Mobile / Inline coach button */}
-            <div className="pt-6 mt-6 border-t border-gray-50 dark:border-gray-850 sm:hidden">
-              <button
-                onClick={handleCoachClick}
-                className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-xs transition-colors shadow-md"
-              >
-                <MessageSquare className="w-4 h-4" />
-                Talk to AI Coach
-              </button>
-            </div>
+            {/* Achievements Card */}
+            <BadgesCard logs={weeklyLogs} user={user} />
           </div>
 
           {/* Recharts Chart Panel */}
