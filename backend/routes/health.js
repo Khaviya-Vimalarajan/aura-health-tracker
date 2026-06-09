@@ -22,19 +22,21 @@ router.get('/today', authMiddleware, async (req, res) => {
   }
 });
 
-// Create or update today's log
+// Create or update today's or custom date's log
 router.post('/log', authMiddleware, async (req, res) => {
   try {
-    const { energyScore, mood, sleepHours, waterIntake, steps, habits, notes } = req.body;
+    const { date, energyScore, mood, sleepHours, waterIntake, steps, habits, notes } = req.body;
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const logDate = date ? new Date(date) : new Date();
+    logDate.setHours(0, 0, 0, 0);
+    
+    const nextDay = new Date(logDate.getTime() + 24 * 60 * 60 * 1000);
     
     const log = await HealthLog.findOneAndUpdate(
-      { userId: req.userId, date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) } },
+      { userId: req.userId, date: { $gte: logDate, $lt: nextDay } },
       {
         userId: req.userId,
-        date: today,
+        date: logDate,
         energyScore,
         mood,
         sleepHours,
@@ -47,6 +49,30 @@ router.post('/log', authMiddleware, async (req, res) => {
     );
     
     res.status(201).json(log);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get health logs for a specific year and month
+router.get('/calendar', authMiddleware, async (req, res) => {
+  try {
+    const year = parseInt(req.query.year) || new Date().getFullYear();
+    const month = parseInt(req.query.month); // 0-indexed: 0 = Jan, 11 = Dec
+    
+    if (isNaN(month) || month < 0 || month > 11) {
+      return res.status(400).json({ message: 'Valid month (0-11) is required' });
+    }
+
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 1);
+
+    const logs = await HealthLog.find({
+      userId: req.userId,
+      date: { $gte: startDate, $lt: endDate },
+    }).sort({ date: 1 });
+
+    res.json(logs);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

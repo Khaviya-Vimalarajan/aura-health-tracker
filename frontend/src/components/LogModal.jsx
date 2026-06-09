@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { X, Smile, Star, Coffee, Footprints, Brain, Navigation, Apple, MessageSquare, AlertCircle } from 'lucide-react';
 
-export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
+export default function LogModal({ isOpen, onClose, onSave, todayLog, logForDate, selectedDate }) {
   const [energyScore, setEnergyScore] = useState(50);
   const [mood, setMood] = useState('good');
   const [sleepHours, setSleepHours] = useState(7);
@@ -17,20 +17,22 @@ export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Load today's existing log if available
+  const logToUse = logForDate || todayLog;
+
+  // Load existing log if available
   useEffect(() => {
-    if (todayLog && !todayLog.message) {
-      setEnergyScore(todayLog.energyScore ?? 50);
-      setMood(todayLog.mood ?? 'good');
-      setSleepHours(todayLog.sleepHours ?? 7);
-      setWaterIntake(todayLog.waterIntake ?? 0);
-      setSteps(todayLog.steps ?? 0);
+    if (logToUse && !logToUse.message) {
+      setEnergyScore(logToUse.energyScore ?? 50);
+      setMood(logToUse.mood ?? 'good');
+      setSleepHours(logToUse.sleepHours ?? 7);
+      setWaterIntake(logToUse.waterIntake ?? 0);
+      setSteps(logToUse.steps ?? 0);
       setHabits({
-        meditated: todayLog.habits?.meditated ?? false,
-        walked: todayLog.habits?.walked ?? false,
-        ateHealthy: todayLog.habits?.ateHealthy ?? false,
+        meditated: logToUse.habits?.meditated ?? false,
+        walked: logToUse.habits?.walked ?? false,
+        ateHealthy: logToUse.habits?.ateHealthy ?? false,
       });
-      setNotes(todayLog.notes ?? '');
+      setNotes(logToUse.notes ?? '');
     } else {
       // Defaults
       setEnergyScore(50);
@@ -45,7 +47,7 @@ export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
       });
       setNotes('');
     }
-  }, [todayLog, isOpen]);
+  }, [logToUse, isOpen]);
 
   if (!isOpen) return null;
 
@@ -64,6 +66,7 @@ export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
 
     try {
       const response = await axios.post('http://localhost:5000/api/health/log', {
+        date: selectedDate ? selectedDate.toISOString() : undefined,
         energyScore: Number(energyScore),
         mood,
         sleepHours: Number(sleepHours),
@@ -95,7 +98,11 @@ export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
         {/* Modal Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Log Daily Health Metrics</h2>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {selectedDate 
+                ? `Log Health Metrics - ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                : 'Log Daily Health Metrics'}
+            </h2>
             <p className="text-xs text-gray-500">Capture your habits and vital scores</p>
           </div>
           <button 
@@ -119,7 +126,7 @@ export default function LogModal({ isOpen, onClose, onSave, todayLog }) {
           <div>
             <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 mb-3">
               <Smile className="w-4 h-4 text-emerald-500" />
-              How are you feeling today?
+              How were you feeling on this day?
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {moods.map((m) => (

@@ -18,6 +18,7 @@ import SettingsModal from '../components/SettingsModal';
 import { generateWeeklyPDF } from '../utils/pdfGenerator';
 import BadgesCard from '../components/BadgesCard';
 import VibeGrid from '../components/VibeGrid';
+import InteractiveCalendar from '../components/InteractiveCalendar';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [vibeLogs, setVibeLogs] = useState([]);
   const [chartLogs, setChartLogs] = useState([]);
   const [chartDays, setChartDays] = useState(7);
+  const [activeView, setActiveView] = useState('chart');
   const [insightsData, setInsightsData] = useState({ status: 'collecting', insights: [] });
   
   const [isLogOpen, setIsLogOpen] = useState(false);
@@ -481,91 +483,132 @@ export default function Dashboard() {
             <VibeGrid logs={vibeLogs} />
           </div>
 
-          {/* Recharts Chart Panel */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-              <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
-                {chartDays}-Day Health Trend
-              </h3>
-              
-              <div className="flex items-center gap-2.5">
-                {/* Range Toggle */}
-                <div className="flex bg-gray-50 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-150 dark:border-gray-705 text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setChartDays(7)}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      chartDays === 7
-                        ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
-                    }`}
-                  >
-                    7D
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setChartDays(30)}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      chartDays === 30
-                        ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
-                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
-                    }`}
-                  >
-                    30D
-                  </button>
-                </div>
-
-                {/* Download PDF button */}
-                {chartData.length > 0 && (
-                  <button
-                    onClick={handlePDFClick}
-                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold text-xs transition-colors"
-                  >
-                    Download Report
-                  </button>
-                )}
+          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-6 rounded-3xl shadow-sm space-y-6">
+            {/* View Switcher Tabs */}
+            <div className="flex justify-between items-center mb-6 border-b border-gray-50 dark:border-gray-800 pb-3">
+              <div className="flex gap-4 text-xs sm:text-sm font-extrabold text-gray-400">
+                <button
+                  onClick={() => setActiveView('chart')}
+                  className={`flex items-center gap-1.5 pb-2 border-b-2 transition-all ${
+                    activeView === 'chart'
+                      ? 'border-emerald-500 text-gray-900 dark:text-white'
+                      : 'border-transparent hover:text-gray-650 dark:hover:text-gray-300'
+                  }`}
+                >
+                  📊 Trend Chart
+                </button>
+                <button
+                  onClick={() => setActiveView('calendar')}
+                  className={`flex items-center gap-1.5 pb-2 border-b-2 transition-all ${
+                    activeView === 'calendar'
+                      ? 'border-emerald-500 text-gray-900 dark:text-white'
+                      : 'border-transparent hover:text-gray-650 dark:hover:text-gray-350'
+                  }`}
+                >
+                  📅 Wellness Calendar
+                </button>
               </div>
             </div>
 
-            {chartData.length > 0 ? (
-              <div className="h-64 sm:h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="auraGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#1F2937' : '#F3F4F6'} />
-                    <XAxis dataKey="date" stroke="#9CA3AF" fontSize={10} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#9CA3AF" fontSize={10} domain={[0, 100]} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: darkMode ? '#111827' : '#FFFFFF',
-                        borderColor: darkMode ? '#374151' : '#E5E7EB',
-                        borderRadius: '16px',
-                        fontSize: '11px',
-                        color: darkMode ? '#FFFFFF' : '#111827'
-                      }} 
-                    />
-                    <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="Aura Score" 
-                      stroke="#10B981" 
-                      strokeWidth={2.5} 
-                      fillOpacity={1} 
-                      fill="url(#auraGrad)" 
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+            {activeView === 'chart' ? (
+              <div className="animate-slide-up space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                      <Activity className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-extrabold text-gray-950 dark:text-white flex items-center gap-2">
+                        {chartDays}-Day Health Trend
+                      </h3>
+                      <p className="text-xs text-gray-400">Visualize your Aura Score, sleep, water, and step metrics</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                    {/* Range Toggle */}
+                    <div className="flex bg-gray-50 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-150 dark:border-gray-705 text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setChartDays(7)}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          chartDays === 7
+                            ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
+                        }`}
+                      >
+                        7D
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartDays(30)}
+                        className={`px-2.5 py-1 rounded-md transition-all ${
+                          chartDays === 30
+                            ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
+                        }`}
+                      >
+                        30D
+                      </button>
+                    </div>
+
+                    {/* Download PDF button */}
+                    {chartData.length > 0 && (
+                      <button
+                        onClick={handlePDFClick}
+                        className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold text-xs transition-colors"
+                      >
+                        Download Report
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {chartData.length > 0 ? (
+                  <div className="h-64 sm:h-72 pt-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="auraGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? '#1F2937' : '#F3F4F6'} />
+                        <XAxis dataKey="date" stroke="#9CA3AF" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#9CA3AF" fontSize={10} domain={[0, 100]} tickLine={false} axisLine={false} />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: darkMode ? '#111827' : '#FFFFFF',
+                            borderColor: darkMode ? '#374151' : '#E5E7EB',
+                            borderRadius: '16px',
+                            fontSize: '11px',
+                            color: darkMode ? '#FFFFFF' : '#111827'
+                          }} 
+                        />
+                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                        <Area 
+                          type="monotone" 
+                          dataKey="Aura Score" 
+                          stroke="#10B981" 
+                          strokeWidth={2.5} 
+                          fillOpacity={1} 
+                          fill="url(#auraGrad)" 
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-64 sm:h-72 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-800/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 text-center">
+                    <span className="text-3xl mb-2">📊</span>
+                    <p className="text-xs font-semibold text-gray-500">Not enough logging history to show trends</p>
+                    <p className="text-[10px] text-gray-400 mt-1">Keep logging daily data to view trend graphs</p>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="h-64 sm:h-72 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-850/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 text-center">
-                <span className="text-3xl mb-2">📊</span>
-                <p className="text-xs font-semibold text-gray-500">Not enough logging history to show trends</p>
-                <p className="text-[10px] text-gray-400 mt-1">Keep logging daily data to view trend graphs</p>
+              <div className="animate-slide-up">
+                <InteractiveCalendar onLogChange={fetchData} user={user} token={token} />
               </div>
             )}
           </div>
