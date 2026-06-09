@@ -17,6 +17,7 @@ import CoachDrawer from '../components/CoachDrawer';
 import SettingsModal from '../components/SettingsModal';
 import { generateWeeklyPDF } from '../utils/pdfGenerator';
 import BadgesCard from '../components/BadgesCard';
+import VibeGrid from '../components/VibeGrid';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -34,6 +35,7 @@ export default function Dashboard() {
   
   const [todayLog, setTodayLog] = useState(null);
   const [weeklyLogs, setWeeklyLogs] = useState([]);
+  const [vibeLogs, setVibeLogs] = useState([]);
   const [chartLogs, setChartLogs] = useState([]);
   const [chartDays, setChartDays] = useState(7);
   const [insightsData, setInsightsData] = useState({ status: 'collecting', insights: [] });
@@ -62,6 +64,7 @@ export default function Dashboard() {
     if (!token) {
       setTodayLog(null);
       setWeeklyLogs([]);
+      setVibeLogs([]);
       setChartLogs([]);
       setInsightsData({
         status: 'collecting',
@@ -75,15 +78,17 @@ export default function Dashboard() {
     try {
       setLoading(true);
       
-      const [todayRes, weeklyRes, insightsRes] = await Promise.all([
+      const [todayRes, weeklyRes, insightsRes, vibeRes] = await Promise.all([
         axios.get('http://localhost:5000/api/health/today'),
         axios.get('http://localhost:5000/api/health/weekly'),
-        axios.get('http://localhost:5000/api/health/insights')
+        axios.get('http://localhost:5000/api/health/insights'),
+        axios.get('http://localhost:5000/api/health/analytics?days=28')
       ]);
 
       setTodayLog(todayRes.data);
       setWeeklyLogs(weeklyRes.data);
       setInsightsData(insightsRes.data);
+      setVibeLogs(vibeRes.data);
       
       // Also sync chart data
       await fetchChartData();
@@ -471,6 +476,9 @@ export default function Dashboard() {
 
             {/* Achievements Card */}
             <BadgesCard logs={weeklyLogs} user={user} />
+
+            {/* Vibe Grid Card */}
+            <VibeGrid logs={vibeLogs} />
           </div>
 
           {/* Recharts Chart Panel */}
