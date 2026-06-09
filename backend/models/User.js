@@ -33,6 +33,8 @@ const UserSchema = new mongoose.Schema({
   preferences: {
     theme: { type: String, default: 'dark' },
     waterGoal: { type: Number, default: 2500 },
+    stepsGoal: { type: Number, default: 10000 },
+    sleepGoal: { type: Number, default: 8 },
   },
 });
 

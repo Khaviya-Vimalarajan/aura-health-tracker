@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { authMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -98,7 +99,54 @@ router.post('/login', async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        preferences: user.preferences
       },
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get User Profile (including goals/preferences)
+router.get('/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Update User Profile & Preferences
+router.put('/profile', authMiddleware, async (req, res) => {
+  try {
+    const { name, preferences } = req.body;
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (name) user.name = name;
+    if (preferences) {
+      user.preferences = {
+        ...user.preferences,
+        ...preferences
+      };
+    }
+
+    await user.save();
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        preferences: user.preferences
+      }
     });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });

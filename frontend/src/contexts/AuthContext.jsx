@@ -61,6 +61,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateProfile = async (name, preferences) => {
+    try {
+      const response = await axios.put('http://localhost:5000/api/auth/profile', {
+        name,
+        preferences
+      });
+      const { user } = response.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      setUser(user);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -70,7 +85,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, token }}>
+    <AuthContext.Provider value={{ user, login, register, logout, loading, token, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

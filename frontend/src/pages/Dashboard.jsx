@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import axios from 'axios';
 import { 
   Activity, Sparkles, Smile, Coffee, Plus, Droplets, 
-  Footprints, Brain, Calendar, Moon, Sun, LogOut, MessageSquare, Apple
+  Footprints, Brain, Calendar, Moon, Sun, LogOut, MessageSquare, Apple, Settings
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, 
@@ -14,6 +14,7 @@ import {
 
 import LogModal from '../components/LogModal';
 import CoachDrawer from '../components/CoachDrawer';
+import SettingsModal from '../components/SettingsModal';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -35,6 +36,7 @@ export default function Dashboard() {
   
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Fetch dashboard data
@@ -92,6 +94,15 @@ export default function Dashboard() {
     setIsCoachOpen(true);
   };
 
+  const handleSettingsClick = () => {
+    if (!token) {
+      alert("Please sign up or log in to edit preferences!");
+      navigate('/login');
+      return;
+    }
+    setIsSettingsOpen(true);
+  };
+
   // Mood to emoji/score mapping
   const moodMap = {
     great: { emoji: '😃', score: 100, color: 'text-emerald-500 bg-emerald-500/10' },
@@ -105,14 +116,18 @@ export default function Dashboard() {
   const getAuraScore = (log) => {
     if (!log || log.message) return 0;
     
+    const sleepGoal = user?.preferences?.sleepGoal || 8;
+    const stepsGoal = user?.preferences?.stepsGoal || 10000;
+    const waterGoal = user?.preferences?.waterGoal || 2500;
+    
     // Weights: Sleep (30%), Mood (25%), Steps (25%), Water (20%)
-    const sleepScore = Math.min(((log.sleepHours || 0) / 8) * 100, 100);
+    const sleepScore = Math.min(((log.sleepHours || 0) / sleepGoal) * 100, 100);
     
     const moodInfo = moodMap[log.mood] || { score: 50 };
     const moodScore = moodInfo.score;
     
-    const stepsScore = Math.min(((log.steps || 0) / 10000) * 100, 100);
-    const waterScore = Math.min(((log.waterIntake || 0) / 2500) * 100, 100);
+    const stepsScore = Math.min(((log.steps || 0) / stepsGoal) * 100, 100);
+    const waterScore = Math.min(((log.waterIntake || 0) / waterGoal) * 100, 100);
     
     const score = (sleepScore * 0.3) + (moodScore * 0.25) + (stepsScore * 0.25) + (waterScore * 0.2);
     return Math.round(score);
@@ -186,6 +201,17 @@ export default function Dashboard() {
           >
             {darkMode ? <Sun className="w-5 h-5 text-yellow-500" /> : <Moon className="w-5 h-5 text-gray-700" />}
           </button>
+
+          {/* Preferences Settings Button */}
+          {token && (
+            <button
+              onClick={handleSettingsClick}
+              className="p-2 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+              title="Preferences"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
 
           {/* Logout or Sign In */}
           {token ? (
@@ -275,7 +301,7 @@ export default function Dashboard() {
                   </span>
                   <div className="mt-3 flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">{todayLog.sleepHours}</span>
-                    <span className="text-xs text-gray-500">hours</span>
+                    <span className="text-xs text-gray-500">/ {user?.preferences?.sleepGoal || 8} hrs</span>
                   </div>
                 </div>
 
@@ -286,7 +312,7 @@ export default function Dashboard() {
                   </span>
                   <div className="mt-3 flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">{todayLog.waterIntake}</span>
-                    <span className="text-xs text-gray-500">ml / 2500ml</span>
+                    <span className="text-xs text-gray-500">ml / {user?.preferences?.waterGoal || 2500}ml</span>
                   </div>
                 </div>
 
@@ -297,7 +323,7 @@ export default function Dashboard() {
                   </span>
                   <div className="mt-3 flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">{todayLog.steps}</span>
-                    <span className="text-xs text-gray-500">steps</span>
+                    <span className="text-xs text-gray-500">/ {user?.preferences?.stepsGoal || 10000} steps</span>
                   </div>
                 </div>
 
@@ -466,6 +492,11 @@ export default function Dashboard() {
       <CoachDrawer 
         isOpen={isCoachOpen} 
         onClose={() => setIsCoachOpen(false)} 
+      />
+
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
       />
     </div>
   );
