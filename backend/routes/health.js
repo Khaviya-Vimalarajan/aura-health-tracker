@@ -1,6 +1,7 @@
 import express from 'express';
 import HealthLog from '../models/HealthLog.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { runReminderCheck } from '../cron/reminders.js';
 
 const router = express.Router();
 
@@ -196,6 +197,16 @@ router.get('/insights', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+});
+
+// Trigger daily logging reminders check manually (testing route)
+router.post('/trigger-reminders', authMiddleware, async (req, res) => {
+  try {
+    const result = await runReminderCheck();
+    res.json({ message: 'Reminder check triggered successfully', result });
+  } catch (error) {
+    res.status(500).json({ message: 'Error running reminder check', error: error.message });
   }
 });
 

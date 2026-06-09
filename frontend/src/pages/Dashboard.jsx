@@ -15,6 +15,7 @@ import {
 import LogModal from '../components/LogModal';
 import CoachDrawer from '../components/CoachDrawer';
 import SettingsModal from '../components/SettingsModal';
+import { generateWeeklyPDF } from '../utils/pdfGenerator';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -101,6 +102,15 @@ export default function Dashboard() {
       return;
     }
     setIsSettingsOpen(true);
+  };
+
+  const handlePDFClick = () => {
+    if (!token) {
+      alert("Please sign up or log in to download your health report!");
+      navigate('/login');
+      return;
+    }
+    generateWeeklyPDF(weeklyLogs, user);
   };
 
   // Mood to emoji/score mapping
@@ -431,7 +441,17 @@ export default function Dashboard() {
 
           {/* Recharts Chart Panel */}
           <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm">
-            <h3 className="text-base font-extrabold text-gray-900 dark:text-white mb-6">7-Day Health Trend</h3>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-base font-extrabold text-gray-900 dark:text-white">7-Day Health Trend</h3>
+              {chartData.length > 0 && (
+                <button
+                  onClick={handlePDFClick}
+                  className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold text-xs transition-colors"
+                >
+                  Download Report
+                </button>
+              )}
+            </div>
 
             {chartData.length > 0 ? (
               <div className="h-64 sm:h-72">

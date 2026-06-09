@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 import coachRoutes from './routes/coach.js';
+import { initCronJobs } from './cron/reminders.js';
 
 dotenv.config();
 
@@ -30,4 +31,5 @@ app.get('/', (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(` Server running on http://localhost:${PORT}`);
+  initCronJobs();
 });
