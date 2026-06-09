@@ -12,6 +12,7 @@ export default function CoachDrawer({ isOpen, onClose }) {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [aiModel, setAiModel] = useState('demo');
   
   const messagesEndRef = useRef(null);
 
@@ -45,6 +46,11 @@ export default function CoachDrawer({ isOpen, onClose }) {
       });
 
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.content }]);
+      if (response.data.model && response.data.model !== 'demo-mode-fallbacks') {
+        setAiModel('live');
+      } else {
+        setAiModel('demo');
+      }
     } catch (err) {
       console.error(err);
       setError('Aura Coach is taking a break. Please check your network or try again.');
@@ -74,7 +80,18 @@ export default function CoachDrawer({ isOpen, onClose }) {
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">Aura AI Coach</h2>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                Aura AI Coach
+                {aiModel === 'live' ? (
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                    Live AI
+                  </span>
+                ) : (
+                  <span className="text-[9px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                    Demo Mode
+                  </span>
+                )}
+              </h2>
               <span className="text-[10px] text-emerald-500 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
                 Connected to Logs

@@ -7,15 +7,16 @@ const router = express.Router();
 
 // POST /api/coach/chat
 router.post('/chat', authMiddleware, async (req, res) => {
-  try {
-    const { messages } = req.body; // Array of { role: 'user'|'assistant', content: string }
-    
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ message: 'Messages array is required' });
-    }
+  const { messages } = req.body; // Array of { role: 'user'|'assistant', content: string }
+  let logs = [];
+  
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ message: 'Messages array is required' });
+  }
 
+  try {
     // Retrieve recent logs (past 14 days)
-    const logs = await HealthLog.find({ userId: req.userId })
+    logs = await HealthLog.find({ userId: req.userId })
       .sort({ date: -1 })
       .limit(14);
 
@@ -108,8 +109,33 @@ If they ask you to analyze their patterns, refer to the data above. If they have
     });
 
   } catch (error) {
-    console.error('AI Coach Error:', error);
-    res.status(500).json({ message: 'Error processing AI chat query', error: error.message });
+    console.error('AI Coach Error (falling back to demo mode):', error.message);
+    
+    // Safely fallback to the mock coach logic using real database stats so it never crashes for the user/recruiter
+    const userMessage = messages && messages.length > 0 ? messages[messages.length - 1].content.toLowerCase() : '';
+    let responseContent = "";
+
+    if (userMessage.includes('sleep') || userMessage.includes('tired')) {
+      const avgSleep = logs && logs.length ? (logs.reduce((acc, curr) => acc + curr.sleepHours, 0) / logs.length).toFixed(1) : 0;
+      responseContent = `Hello there! I noticed you are asking about your sleep patterns. Looking at your logs, your average sleep duration is ${avgSleep} hours.\n\nTo optimize your sleep, I'd suggest winding down 30 minutes earlier, keeping your bedroom dark, and logging a calm habit like meditation. How does your evening routine look tonight?\n\n*(Note: Fallback Mode active - Anthropic API returned: "${error.message}")*`;
+    } else if (userMessage.includes('water') || userMessage.includes('hydrate') || userMessage.includes('hydration')) {
+      const avgWater = logs && logs.length ? Math.round(logs.reduce((acc, curr) => acc + curr.waterIntake, 0) / logs.length) : 0;
+      responseContent = `Hi! Staying hydrated is crucial for maintaining energy! Your recorded logs show an average water intake of ${avgWater} ml.\n\nTry keeping a reusable bottle at your desk and sipping periodically. Small steps lead to big wins!\n\n*(Note: Fallback Mode active - Anthropic API returned: "${error.message}")*`;
+    } else if (userMessage.includes('mood') || userMessage.includes('vibe')) {
+      const moodCounts = logs && logs.length ? logs.reduce((acc, curr) => {
+        acc[curr.mood] = (acc[curr.mood] || 0) + 1;
+        return acc;
+      }, {}) : {};
+      const dominantMood = Object.keys(moodCounts).length ? Object.keys(moodCounts).reduce((a, b) => moodCounts[a] > moodCounts[b] ? a : b) : 'good';
+      responseContent = `Hey! Your mood history has been predominantly "${dominantMood}" recently.\n\nIt is completely natural to experience ups and downs. Doing simple things like going for a short walk or taking 5 deep breaths can help lift your state. What's one positive thing you can focus on today?\n\n*(Note: Fallback Mode active - Anthropic API returned: "${error.message}")*`;
+    } else {
+      responseContent = `Hi! I'm Aura Coach, your personal wellness companion. I can analyze your logs, help you set habits, or design customized wellness challenges.\n\nBased on your logging, you have recorded ${logs ? logs.length : 0} day(s) of health logs. What aspect of your health would you like to discuss today - sleep, steps, habits, or hydration?\n\n*(Note: Fallback Mode active - Anthropic API returned: "${error.message}")*`;
+    }
+
+    return res.json({
+      content: responseContent,
+      model: 'demo-mode-fallbacks'
+    });
   }
 });
 
