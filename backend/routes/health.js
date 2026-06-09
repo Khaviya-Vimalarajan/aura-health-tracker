@@ -69,6 +69,24 @@ router.get('/weekly', authMiddleware, async (req, res) => {
   }
 });
 
+// Get health logs for custom analytics range (e.g. 7, 30 days)
+router.get('/analytics', authMiddleware, async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 7;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const logs = await HealthLog.find({
+      userId: req.userId,
+      date: { $gte: startDate },
+    }).sort({ date: -1 });
+    
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // Get health insights (Correlation Engine)
 router.get('/insights', authMiddleware, async (req, res) => {
   try {

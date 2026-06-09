@@ -33,6 +33,8 @@ export default function Dashboard() {
   
   const [todayLog, setTodayLog] = useState(null);
   const [weeklyLogs, setWeeklyLogs] = useState([]);
+  const [chartLogs, setChartLogs] = useState([]);
+  const [chartDays, setChartDays] = useState(7);
   const [insightsData, setInsightsData] = useState({ status: 'collecting', insights: [] });
   
   const [isLogOpen, setIsLogOpen] = useState(false);
@@ -40,11 +42,26 @@ export default function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Fetch chart logs specifically when the range changes
+  const fetchChartData = async () => {
+    if (!token) {
+      setChartLogs([]);
+      return;
+    }
+    try {
+      const res = await axios.get(`http://localhost:5000/api/health/analytics?days=${chartDays}`);
+      setChartLogs(res.data);
+    } catch (err) {
+      console.error('Error fetching chart analytics:', err);
+    }
+  };
+
   // Fetch dashboard data
   const fetchData = async () => {
     if (!token) {
       setTodayLog(null);
       setWeeklyLogs([]);
+      setChartLogs([]);
       setInsightsData({
         status: 'collecting',
         message: 'Sign up to record logs and unlock your smart correlation insights!',
@@ -66,6 +83,9 @@ export default function Dashboard() {
       setTodayLog(todayRes.data);
       setWeeklyLogs(weeklyRes.data);
       setInsightsData(insightsRes.data);
+      
+      // Also sync chart data
+      await fetchChartData();
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -76,6 +96,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
   }, [token]);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [chartDays, token]);
 
   const handleLogClick = () => {
     if (!token) {
@@ -145,13 +169,16 @@ export default function Dashboard() {
 
   const currentAuraScore = getAuraScore(todayLog);
 
-  // Format Recharts data (last 7 days)
-  const chartData = [...weeklyLogs]
+  // Format Recharts data (dynamic days)
+  const chartData = [...chartLogs]
     .reverse()
     .map(log => {
       const dateObj = new Date(log.date);
+      const label = chartDays <= 7
+        ? dateObj.toLocaleDateString('en-US', { weekday: 'short' })
+        : dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       return {
-        date: dateObj.toLocaleDateString('en-US', { weekday: 'short' }),
+        date: label,
         'Aura Score': getAuraScore(log),
         'Sleep (Hrs)': log.sleepHours || 0,
         'Water (L)': (log.waterIntake || 0) / 1000,
@@ -441,16 +468,48 @@ export default function Dashboard() {
 
           {/* Recharts Chart Panel */}
           <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-base font-extrabold text-gray-900 dark:text-white">7-Day Health Trend</h3>
-              {chartData.length > 0 && (
-                <button
-                  onClick={handlePDFClick}
-                  className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold text-xs transition-colors"
-                >
-                  Download Report
-                </button>
-              )}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+              <h3 className="text-base font-extrabold text-gray-900 dark:text-white">
+                {chartDays}-Day Health Trend
+              </h3>
+              
+              <div className="flex items-center gap-2.5">
+                {/* Range Toggle */}
+                <div className="flex bg-gray-50 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-150 dark:border-gray-705 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setChartDays(7)}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      chartDays === 7
+                        ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
+                    }`}
+                  >
+                    7D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartDays(30)}
+                    className={`px-2.5 py-1 rounded-md transition-all ${
+                      chartDays === 30
+                        ? 'bg-white dark:bg-gray-900 text-emerald-500 shadow-sm'
+                        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white'
+                    }`}
+                  >
+                    30D
+                  </button>
+                </div>
+
+                {/* Download PDF button */}
+                {chartData.length > 0 && (
+                  <button
+                    onClick={handlePDFClick}
+                    className="py-1.5 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    Download Report
+                  </button>
+                )}
+              </div>
             </div>
 
             {chartData.length > 0 ? (
