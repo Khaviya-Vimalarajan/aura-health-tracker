@@ -19,6 +19,8 @@ import { generateWeeklyPDF } from '../utils/pdfGenerator';
 import BadgesCard from '../components/BadgesCard';
 import VibeGrid from '../components/VibeGrid';
 import InteractiveCalendar from '../components/InteractiveCalendar';
+import QuestsCard from '../components/QuestsCard';
+import AuraStudio from '../components/AuraStudio';
 
 export default function Dashboard() {
   const { user: contextUser, logout, token: contextToken } = useAuth();
@@ -42,6 +44,29 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState('chart');
   const [insightsData, setInsightsData] = useState({ status: 'collecting', insights: [] });
   
+  const [activeQuestId, setActiveQuestId] = useState(() => localStorage.getItem('activeQuestId') || null);
+  const [completedQuests, setCompletedQuests] = useState(() => {
+    const saved = localStorage.getItem('completedQuests');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [questXP, setQuestXP] = useState(() => Number(localStorage.getItem('questXP')) || 0);
+
+  const getTodayDateKey = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const [isAuraStudioQuestDone, setIsAuraStudioQuestDone] = useState(() => {
+    const todayKey = getTodayDateKey();
+    const saved = localStorage.getItem(`aura_studio_quest_${todayKey}`);
+    return saved === 'true';
+  });
+
+  const handleAuraStudioQuestComplete = () => {
+    const todayKey = getTodayDateKey();
+    localStorage.setItem(`aura_studio_quest_${todayKey}`, 'true');
+    setIsAuraStudioQuestDone(true);
+  };
+
   const [isLogOpen, setIsLogOpen] = useState(false);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -177,6 +202,76 @@ export default function Dashboard() {
 
   const currentAuraScore = getAuraScore(todayLog);
 
+  // Calculate badges count for XP calculation
+  const getUnlockedBadgesCount = () => {
+    if (!Array.isArray(weeklyLogs) || weeklyLogs.length === 0) return 0;
+    
+    const waterGoal = user?.preferences?.waterGoal || 2500;
+    const sleepGoal = user?.preferences?.sleepGoal || 8;
+    const stepsGoal = user?.preferences?.stepsGoal || 10000;
+
+    const getAuraScoreLocal = (log) => {
+      if (!log || log.message) return 0;
+      const sleepScore = Math.min(((log.sleepHours || 0) / sleepGoal) * 100, 100);
+      const moodMapping = { great: 100, good: 80, okay: 60, low: 30, exhausted: 10 };
+      const moodScore = moodMapping[log.mood] || 50;
+      const stepsScore = Math.min(((log.steps || 0) / stepsGoal) * 100, 100);
+      const waterScore = Math.min(((log.waterIntake || 0) / waterGoal) * 100, 100);
+      return Math.round((sleepScore * 0.3) + (moodScore * 0.25) + (stepsScore * 0.25) + (waterScore * 0.2));
+    };
+
+    const waterDays = weeklyLogs.filter(log => log && !log.message && (log.waterIntake || 0) >= waterGoal).length;
+    const hasWaterBadge = waterDays >= 3;
+
+    const sleepDays = weeklyLogs.filter(log => log && !log.message && (log.sleepHours || 0) >= sleepGoal).length;
+    const hasSleepBadge = sleepDays >= 3;
+
+    const meditationDays = weeklyLogs.filter(log => log && !log.message && log.habits?.meditated).length;
+    const hasMeditationBadge = meditationDays >= 2;
+
+    const hasAuraBadge = weeklyLogs.some(log => log && !log.message && getAuraScoreLocal(log) >= 90);
+
+    const calculateStreak = () => {
+      const validLogs = weeklyLogs.filter(log => log && !log.message);
+      if (validLogs.length === 0) return 0;
+      const sorted = [...validLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+      let currentStreak = 1;
+      let maxStreak = 1;
+      for (let i = 1; i < sorted.length; i++) {
+        const prevDate = new Date(sorted[i - 1].date);
+        const currDate = new Date(sorted[i].date);
+        const diffTime = Math.abs(currDate - prevDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 1) {
+          currentStreak++;
+          if (currentStreak > maxStreak) {
+            maxStreak = currentStreak;
+          }
+        } else if (diffDays > 1) {
+          currentStreak = 1;
+        }
+      }
+      return maxStreak;
+    };
+    const streak = calculateStreak();
+    const hasStreakBadge = streak >= 3;
+
+    let count = 0;
+    if (hasStreakBadge) count++;
+    if (hasWaterBadge) count++;
+    if (hasSleepBadge) count++;
+    if (hasMeditationBadge) count++;
+    if (hasAuraBadge) count++;
+    return count;
+  };
+
+  const validVibeLogs = Array.isArray(vibeLogs) ? vibeLogs.filter(log => log && !log.message) : [];
+  const vibeLogsLength = validVibeLogs.length;
+  const unlockedBadgesCount = getUnlockedBadgesCount();
+  const totalXP = (vibeLogsLength * 100) + (unlockedBadgesCount * 200) + questXP;
+  const userLevel = Math.floor(totalXP / 500) + 1;
+  const progressXP = totalXP % 500;
+
   // Format Recharts data (dynamic days)
   const chartData = [...chartLogs]
     .reverse()
@@ -221,7 +316,25 @@ export default function Dashboard() {
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white">Aura Health</h1>
             {token ? (
-              <p className="text-xs text-gray-500">Welcome back, {user?.name || 'Aura User'}</p>
+              <div className="mt-1 flex flex-col gap-1 w-48 sm:w-60">
+                <p className="text-[11px] text-gray-500 font-bold">Welcome back, {user?.name || 'Aura User'}</p>
+                {/* Level / XP Progress Bar */}
+                <div className="space-y-0.5">
+                  <div className="flex justify-between items-center text-[9px] font-bold text-gray-400">
+                    <span className="text-emerald-500 font-black flex items-center gap-0.5">
+                      <Sparkles className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500/10 animate-pulse" />
+                      Lvl {userLevel}
+                    </span>
+                    <span>{progressXP} / 500 XP</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden shadow-inner relative">
+                    <div 
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                      style={{ width: `${(progressXP / 500) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
             ) : (
               <p className="text-xs text-gray-500">Discover your glow (Guest Mode)</p>
             )}
@@ -281,42 +394,81 @@ export default function Dashboard() {
       {/* Main Grid Layout */}
       <main className="max-w-7xl mx-auto space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Widget 1: Aura Score Gauge */}
-          <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-between text-center relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-500"></div>
-            
-            <h2 className="text-base font-extrabold text-gray-700 dark:text-gray-300">Daily Aura Score</h2>
-            
-            <div className="relative flex items-center justify-center my-6">
-              <svg className="w-36 h-36 transform -rotate-90">
-                <circle cx="72" cy="72" r={radius} className="text-gray-100 dark:text-gray-800" strokeWidth="10" stroke="currentColor" fill="transparent" />
-                <circle cx="72" cy="72" r={radius} className="text-emerald-500 transition-all duration-500 ease-out" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" stroke="currentColor" fill="transparent" />
-              </svg>
-              <div className="absolute flex flex-col items-center">
-                <span className="text-4xl font-black text-gray-900 dark:text-white leading-none">{currentAuraScore}</span>
-                <span className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Glow Rating</span>
+          {/* Column 1: Aura Score Gauge & Quests */}
+          <div className="space-y-6 flex flex-col justify-start">
+            {/* Widget 1: Aura Score Gauge */}
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex flex-col items-center justify-between text-center relative overflow-hidden group">
+              <button 
+                onClick={() => setActiveView('studio')}
+                className="absolute top-4 left-4 text-[9px] font-black text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-0.5 transition-colors duration-200 z-10 animate-pulse"
+              >
+                <Sparkles className="w-2.5 h-2.5" />
+                Studio
+              </button>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-all duration-500"></div>
+              
+              <h2 className="text-base font-extrabold text-gray-700 dark:text-gray-300">Daily Aura Score</h2>
+              
+              <div className="relative flex items-center justify-center my-6">
+                <svg className="w-36 h-36 transform -rotate-90">
+                  <circle cx="72" cy="72" r={radius} className="text-gray-100 dark:text-gray-800" strokeWidth="10" stroke="currentColor" fill="transparent" />
+                  <circle cx="72" cy="72" r={radius} className="text-emerald-500 transition-all duration-500 ease-out" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} strokeLinecap="round" stroke="currentColor" fill="transparent" />
+                </svg>
+                <div className="absolute flex flex-col items-center">
+                  <span className="text-4xl font-black text-gray-900 dark:text-white leading-none">{currentAuraScore}</span>
+                  <span className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Glow Rating</span>
+                </div>
               </div>
+
+              <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mb-4">
+                {currentAuraScore > 75 
+                  ? 'Your aura is glowing brilliantly today! Keep it up!'
+                  : currentAuraScore > 40
+                  ? 'Looking good! Hit your sleep or water targets to boost your vibe.'
+                  : 'Your aura is dim. Log habits and refresh to rebuild energy.'}
+              </p>
+
+              <button
+                onClick={handleLogClick}
+                className="btn-primary py-2.5 flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                {todayLog && !todayLog.message ? 'Update Today\'s Log' : 'Log Today\'s Vibe'}
+              </button>
             </div>
 
-            <p className="text-xs text-gray-500 leading-relaxed max-w-[200px] mb-4">
-              {currentAuraScore > 75 
-                ? 'Your aura is glowing brilliantly today! Keep it up!'
-                : currentAuraScore > 40
-                ? 'Looking good! Hit your sleep or water targets to boost your vibe.'
-                : 'Your aura is dim. Log habits and refresh to rebuild energy.'}
-            </p>
-
-            <button
-              onClick={handleLogClick}
-              className="btn-primary py-2.5 flex items-center justify-center gap-1.5"
-            >
-              <Plus className="w-4 h-4" />
-              {todayLog && !todayLog.message ? 'Update Today\'s Log' : 'Log Today\'s Vibe'}
-            </button>
+            {/* Quests Card */}
+            {token && (
+              <QuestsCard 
+                todayLog={todayLog} 
+                user={user} 
+                completedQuests={completedQuests} 
+                activeQuestId={activeQuestId}
+                isAuraStudioQuestDone={isAuraStudioQuestDone}
+                onAcceptQuest={(id) => {
+                  setActiveQuestId(id);
+                  localStorage.setItem('activeQuestId', id);
+                }}
+                onClaimReward={(quest) => {
+                  const newXP = questXP + quest.reward;
+                  setQuestXP(newXP);
+                  localStorage.setItem('questXP', newXP);
+                  
+                  const nextCompleted = [...completedQuests, quest.id];
+                  setCompletedQuests(nextCompleted);
+                  localStorage.setItem('completedQuests', JSON.stringify(nextCompleted));
+                  
+                  setActiveQuestId(null);
+                  localStorage.removeItem('activeQuestId');
+                  
+                  fetchData(); // sync dashboard state
+                }}
+              />
+            )}
           </div>
 
           {/* Widget 2: Today's Metrics Breakdown */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex flex-col justify-between">
+          <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-850 p-6 rounded-3xl shadow-sm flex flex-col justify-start gap-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-base font-extrabold text-gray-900 dark:text-white">Daily Vital Stats</h2>
               <span className="text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full flex items-center gap-1">
@@ -507,6 +659,16 @@ export default function Dashboard() {
                 >
                   📅 Wellness Calendar
                 </button>
+                <button
+                  onClick={() => setActiveView('studio')}
+                  className={`flex items-center gap-1.5 pb-2 border-b-2 transition-all ${
+                    activeView === 'studio'
+                      ? 'border-emerald-500 text-gray-900 dark:text-white'
+                      : 'border-transparent hover:text-gray-650 dark:hover:text-gray-350'
+                  }`}
+                >
+                  🎨 Aura Art Studio
+                </button>
               </div>
             </div>
 
@@ -606,9 +768,17 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : activeView === 'calendar' ? (
               <div className="animate-slide-up">
                 <InteractiveCalendar onLogChange={fetchData} user={user} token={token} />
+              </div>
+            ) : (
+              <div className="animate-slide-up">
+                <AuraStudio 
+                  todayLog={todayLog} 
+                  user={user} 
+                  onQuestComplete={handleAuraStudioQuestComplete} 
+                />
               </div>
             )}
           </div>
