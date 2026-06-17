@@ -72,6 +72,19 @@ export default function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [quickBreathActive, setQuickBreathActive] = useState(false);
+  const [quickBreathTimer, setQuickBreathTimer] = useState(60);
+  const [quickBreathPhase, setQuickBreathPhase] = useState('Inhale');
+  const [isSimulatingWalk, setIsSimulatingWalk] = useState(false);
+  const [sessionSteps, setSessionSteps] = useState(0);
+
+  const [gratitudeText, setGratitudeText] = useState('');
+  const [showGratitudeText, setShowGratitudeText] = useState(null);
+  const [gratitudeBubbles, setGratitudeBubbles] = useState([
+    { x: 50, y: 80, vx: 0.2, vy: -0.5, radius: 24, text: "Grateful for soft warm sunshine ☀️", color: '#F59E0B' },
+    { x: 120, y: 50, vx: -0.3, vy: -0.3, radius: 28, text: "Grateful for deep, relaxing sleep 😴", color: '#8B5CF6' },
+    { x: 180, y: 100, vx: 0.1, vy: -0.4, radius: 22, text: "Grateful for a fresh cup of coffee ☕", color: '#3B82F6' }
+  ]);
   // Fetch chart logs specifically when the range changes
   const fetchChartData = async () => {
     if (!token) {
@@ -133,6 +146,284 @@ export default function Dashboard() {
   useEffect(() => {
     fetchChartData();
   }, [chartDays, token]);
+
+  useEffect(() => {
+    let interval;
+    if (quickBreathActive) {
+      interval = setInterval(() => {
+        setQuickBreathTimer(prev => {
+          if (prev <= 1) {
+            setQuickBreathActive(false);
+            handleQuickBoost('meditated', true, true);
+            handleAuraStudioQuestComplete();
+            return 60;
+          }
+          const elapsed = 60 - prev + 1;
+          const cycle = elapsed % 12;
+          if (cycle >= 1 && cycle <= 4) {
+            setQuickBreathPhase('Inhale 💨');
+          } else if (cycle >= 5 && cycle <= 8) {
+            setQuickBreathPhase('Hold 🧘');
+          } else {
+            setQuickBreathPhase('Exhale 🍃');
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setQuickBreathTimer(60);
+      setQuickBreathPhase('Inhale');
+    }
+    return () => clearInterval(interval);
+  }, [quickBreathActive]);
+
+  const handleQuickBoost = async (field, value, isHabit = false) => {
+    if (!token) {
+      alert("Please sign up or log in to track your daily health logs!");
+      navigate('/login');
+      return;
+    }
+    
+    try {
+      const existingLog = todayLog && !todayLog.message ? todayLog : {
+        energyScore: 60,
+        mood: 'good',
+        sleepHours: 7,
+        waterIntake: 0,
+        steps: 0,
+        habits: { meditated: false, walked: false, ateHealthy: false },
+        notes: 'Quick logged vibe!'
+      };
+
+      const updatedPayload = { ...existingLog };
+      
+      if (isHabit) {
+        updatedPayload.habits = {
+          ...(existingLog.habits || {}),
+          [field]: value
+        };
+      } else {
+        updatedPayload[field] = (existingLog[field] || 0) + value;
+      }
+
+      const energyIncrement = isHabit ? 4 : field === 'waterIntake' ? 3 : 5;
+      updatedPayload.energyScore = Math.min((existingLog.energyScore || 60) + energyIncrement, 100);
+
+      const res = await axios.post('http://localhost:5000/api/health/log', {
+        ...updatedPayload,
+        date: existingLog.date || new Date().toISOString()
+      });
+
+      setTodayLog(res.data);
+      
+      await Promise.all([
+        fetchChartData(),
+        axios.get('http://localhost:5000/api/health/weekly').then(r => setWeeklyLogs(r.data)),
+        axios.get('http://localhost:5000/api/health/insights').then(r => setInsightsData(r.data))
+      ]);
+    } catch (err) {
+      console.error('Error in Quick Boost:', err);
+    }
+  };
+
+  // walking simulator interval
+  useEffect(() => {
+    let interval;
+    if (isSimulatingWalk) {
+      interval = setInterval(() => {
+        setTodayLog(prev => {
+          if (!prev || prev.message) {
+            return {
+              energyScore: 60,
+              mood: 'good',
+              sleepHours: 7,
+              waterIntake: 0,
+              steps: 1,
+              habits: { meditated: false, walked: true, ateHealthy: false },
+              notes: 'Simulating walk!'
+            };
+          }
+          return {
+            ...prev,
+            steps: (prev.steps || 0) + 1,
+            habits: {
+              ...(prev.habits || {}),
+              walked: true
+            }
+          };
+        });
+        setSessionSteps(prev => prev + 1);
+      }, 700); // 700ms is standard walking cadence
+    }
+    return () => clearInterval(interval);
+  }, [isSimulatingWalk]);
+
+  // Sync simulated steps to database every 15 seconds
+  useEffect(() => {
+    let syncInterval;
+    if (isSimulatingWalk) {
+      syncInterval = setInterval(() => {
+        syncSimulatedSteps();
+      }, 15000);
+    }
+    return () => clearInterval(syncInterval);
+  }, [isSimulatingWalk, todayLog]);
+
+  const syncSimulatedSteps = async () => {
+    if (!token || !todayLog || todayLog.message) return;
+    try {
+      await axios.post('http://localhost:5000/api/health/log', {
+        ...todayLog,
+        date: todayLog.date || new Date().toISOString()
+      });
+      fetchChartData();
+    } catch (err) {
+      console.error('Error syncing simulated steps:', err);
+    }
+  };
+
+  const toggleWalkSimulation = () => {
+    if (!token) {
+      alert("Please sign up or log in to simulate walks!");
+      navigate('/login');
+      return;
+    }
+    
+    if (isSimulatingWalk) {
+      setIsSimulatingWalk(false);
+      // Final sync on stop
+      setTimeout(() => {
+        syncSimulatedSteps();
+      }, 100);
+    } else {
+      setSessionSteps(0);
+      setIsSimulatingWalk(true);
+    }
+  };
+
+  // Gratitude canvas animation loop
+  useEffect(() => {
+    const canvas = document.getElementById('gratitudeCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    let animFrame;
+    
+    const render = () => {
+      ctx.clearRect(0, 0, rect.width, rect.height);
+      
+      gratitudeBubbles.forEach((b) => {
+        b.y += b.vy;
+        b.x += b.vx;
+        
+        if (b.x - b.radius < 0 || b.x + b.radius > rect.width) {
+          b.vx *= -1;
+        }
+        if (b.y + b.radius < 0) {
+          b.y = rect.height + b.radius;
+        }
+        
+        const grad = ctx.createRadialGradient(b.x, b.y, 1, b.x, b.y, b.radius);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+        grad.addColorStop(0.2, b.color + '55');
+        grad.addColorStop(0.8, b.color + '15');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius - 1, 0, Math.PI * 2);
+        ctx.strokeStyle = b.color + '77';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+      
+      animFrame = requestAnimationFrame(render);
+    };
+    
+    render();
+    return () => cancelAnimationFrame(animFrame);
+  }, [gratitudeBubbles]);
+
+  const handleGratitudeCanvasClick = (e) => {
+    const canvas = document.getElementById('gratitudeCanvas');
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    let poppedIndex = -1;
+    for (let i = 0; i < gratitudeBubbles.length; i++) {
+      const b = gratitudeBubbles[i];
+      const dist = Math.sqrt((clickX - b.x) ** 2 + (clickY - b.y) ** 2);
+      if (dist < b.radius) {
+        poppedIndex = i;
+        break;
+      }
+    }
+    
+    if (poppedIndex !== -1) {
+      const popped = gratitudeBubbles[poppedIndex];
+      setShowGratitudeText(popped.text);
+      setGratitudeBubbles(prev => prev.filter((_, idx) => idx !== poppedIndex));
+      setTimeout(() => setShowGratitudeText(null), 3500);
+    }
+  };
+
+  const handleLaunchGratitude = async () => {
+    if (!gratitudeText.trim()) return;
+    
+    const colors = ['#3B82F6', '#10B981', '#14B8A6', '#8B5CF6', '#F59E0B', '#EF4444'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    const newBubble = {
+      x: 30 + Math.random() * 150,
+      y: 120,
+      vx: (Math.random() - 0.5) * 0.7,
+      vy: -0.3 - Math.random() * 0.3,
+      radius: 20 + Math.random() * 10,
+      text: gratitudeText,
+      color: randomColor
+    };
+    
+    setGratitudeBubbles(prev => [...prev, newBubble]);
+    setGratitudeText('');
+    
+    if (token) {
+      try {
+        const existingLog = todayLog && !todayLog.message ? todayLog : {
+          energyScore: 60,
+          mood: 'good',
+          sleepHours: 7,
+          waterIntake: 0,
+          steps: 0,
+          habits: { meditated: false, walked: false, ateHealthy: false },
+          notes: ''
+        };
+        const updatedNotes = existingLog.notes 
+          ? `${existingLog.notes} | Gratitude: ${gratitudeText}`
+          : `Gratitude: ${gratitudeText}`;
+          
+        const res = await axios.post('http://localhost:5000/api/health/log', {
+          ...existingLog,
+          notes: updatedNotes.substring(0, 500),
+          date: existingLog.date || new Date().toISOString()
+        });
+        setTodayLog(res.data);
+      } catch (err) {
+        console.error('Error saving gratitude:', err);
+      }
+    }
+  };
 
   const handleLogClick = () => {
     if (!token) {
@@ -562,7 +853,7 @@ export default function Dashboard() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-850/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 text-center h-full">
+              <div className="flex flex-col items-center justify-center p-8 bg-gray-50 dark:bg-gray-850/40 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 text-center h-[260px]">
                 <span className="text-3xl mb-2">🌿</span>
                 <h4 className="text-sm font-bold text-gray-900 dark:text-white">No logs recorded today</h4>
                 <p className="text-xs text-gray-500 max-w-[260px] mt-1 mb-4">Aura score depends on your hydration, steps, habits, and sleep</p>
@@ -574,6 +865,280 @@ export default function Dashboard() {
                 </button>
               </div>
             )}
+
+            {/* Quick Aura Boosters Panel */}
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-6 mt-4 space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xs font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-emerald-500 fill-emerald-500/10 animate-pulse" />
+                    ⚡ Quick Aura Boosters
+                  </h3>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Increment your stats instantly to elevate your aura score & complete quests</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                {/* 1. Quick Hydration */}
+                <div className="p-3 bg-blue-50/20 dark:bg-blue-950/10 border border-blue-100/30 dark:border-blue-950/20 rounded-2xl flex flex-col justify-between gap-3 relative overflow-hidden group">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-blue-500" />
+                    <div>
+                      <span className="text-[9px] font-bold text-blue-600 dark:text-blue-400 block uppercase">Hydration</span>
+                      <span className="text-xs font-black text-gray-700 dark:text-gray-300">
+                        {todayLog && !todayLog.message ? `${todayLog.waterIntake || 0} ml` : '0 ml'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleQuickBoost('waterIntake', 250)}
+                    className="w-full py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold text-[9px] transition-all transform hover:scale-[1.03] shadow-sm active:scale-[0.98]"
+                  >
+                    +250ml Water 💧
+                  </button>
+                </div>
+
+                {/* 2. Quick Movement */}
+                <div className="p-3 bg-emerald-50/20 dark:bg-emerald-950/10 border border-emerald-100/30 dark:border-emerald-950/20 rounded-2xl flex flex-col justify-between gap-3 relative overflow-hidden group">
+                  <div className="flex items-center gap-2">
+                    <Footprints className="w-4 h-4 text-emerald-500" />
+                    <div>
+                      <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 block uppercase">Movement</span>
+                      <span className="text-xs font-black text-gray-700 dark:text-gray-300">
+                        {todayLog && !todayLog.message ? `${(todayLog.steps || 0).toLocaleString()} steps` : '0 steps'}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleQuickBoost('steps', 1000)}
+                    className="w-full py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-[9px] transition-all transform hover:scale-[1.03] shadow-sm active:scale-[0.98]"
+                  >
+                    +1,000 Steps 👣
+                  </button>
+                </div>
+
+                {/* 3. 1-Min Quick Breathing Meditation */}
+                <div className="p-3 bg-purple-50/20 dark:bg-purple-950/10 border border-purple-100/30 dark:border-purple-950/20 rounded-2xl flex flex-col justify-between gap-3 relative overflow-hidden">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-purple-500" />
+                    <div>
+                      <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 block uppercase">Quick Zen</span>
+                      <span className="text-xs font-black text-gray-700 dark:text-gray-300">
+                        {quickBreathActive ? `${quickBreathTimer}s remaining` : todayLog && todayLog.habits?.meditated ? 'Done today ✓' : 'Not meditated'}
+                      </span>
+                    </div>
+                  </div>
+                  {quickBreathActive ? (
+                    <div className="w-full py-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[9px] font-black flex items-center justify-center gap-1 animate-pulse border border-purple-200/20">
+                      <span>{quickBreathPhase}</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setQuickBreathActive(true)}
+                      className="w-full py-1.5 bg-purple-500 hover:bg-purple-600 text-white rounded-xl font-bold text-[9px] transition-all transform hover:scale-[1.03] shadow-sm active:scale-[0.98]"
+                    >
+                      Start 1m Breath 🧘
+                    </button>
+                  )}
+                </div>
+
+                {/* 4. Habit Quick Toggles */}
+                <div className="p-3 bg-yellow-50/20 dark:bg-yellow-950/10 border border-yellow-100/30 dark:border-yellow-950/20 rounded-2xl flex flex-col justify-between gap-1">
+                  <span className="text-[9px] font-bold text-yellow-600 dark:text-yellow-400 uppercase flex items-center gap-1.5">
+                    <Apple className="w-3.5 h-3.5" /> Quick Habits
+                  </span>
+                  
+                  <div className="flex flex-col gap-1 mt-1">
+                    <button
+                      onClick={() => handleQuickBoost('walked', todayLog && todayLog.habits ? !todayLog.habits.walked : true, true)}
+                      className={`py-1 px-2 rounded-lg text-[9px] font-black border text-left flex justify-between items-center transition-all ${
+                        todayLog && todayLog.habits?.walked
+                          ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400 font-bold'
+                          : 'bg-white dark:bg-gray-900 border-gray-150 dark:border-gray-800 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>Logged Walk 👣</span>
+                      <span>{todayLog && todayLog.habits?.walked ? '✓' : '+'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleQuickBoost('ateHealthy', todayLog && todayLog.habits ? !todayLog.habits.ateHealthy : true, true)}
+                      className={`py-1 px-2 rounded-lg text-[9px] font-black border text-left flex justify-between items-center transition-all ${
+                        todayLog && todayLog.habits?.ateHealthy
+                          ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600 dark:text-yellow-400 font-bold'
+                          : 'bg-white dark:bg-gray-900 border-gray-150 dark:border-gray-800 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>Healthy Diet 🥗</span>
+                      <span>{todayLog && todayLog.habits?.ateHealthy ? '✓' : '+'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 🚶 Live Walk Simulator */}
+            <style>{`
+              @keyframes walkLegLeft {
+                0% { transform: rotate(-28deg); }
+                100% { transform: rotate(28deg); }
+              }
+              @keyframes walkLegRight {
+                0% { transform: rotate(28deg); }
+                100% { transform: rotate(-28deg); }
+              }
+              @keyframes marquee {
+                0% { transform: translateX(100%); }
+                100% { transform: translateX(-100%); }
+              }
+            `}</style>
+            
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-6 mt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              {/* Left Column: Animation Canvas Area */}
+              <div className="md:col-span-2 relative bg-gray-950 dark:bg-gray-950 rounded-2xl border border-gray-800 p-6 overflow-hidden h-[240px] flex flex-col justify-between items-center">
+                {/* Moving lines background to simulate forward progress */}
+                <div className="absolute inset-0 flex flex-col justify-around opacity-10 pointer-events-none">
+                  <div className={`h-0.5 bg-white w-full`} style={{ animation: isSimulatingWalk ? 'marquee 2s infinite linear' : 'none' }} />
+                  <div className={`h-0.5 bg-white w-full`} style={{ animation: isSimulatingWalk ? 'marquee 1.5s infinite linear' : 'none', animationDelay: '0.4s' }} />
+                  <div className={`h-0.5 bg-white w-full`} style={{ animation: isSimulatingWalk ? 'marquee 2.5s infinite linear' : 'none', animationDelay: '0.8s' }} />
+                </div>
+
+                <div className="absolute top-3 left-3 bg-black/55 text-[9px] font-bold text-emerald-400 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Live Walk Simulator
+                </div>
+
+                {/* Animated walking avatar */}
+                <div className="flex-1 flex flex-col items-center justify-center mt-4">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center relative shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                    <Footprints className={`w-8 h-8 text-emerald-400 ${isSimulatingWalk ? 'animate-bounce' : ''}`} />
+                  </div>
+                  <div className="flex gap-4 mt-2">
+                    {/* Left Leg */}
+                    <div 
+                      className="w-1.5 h-7 bg-emerald-500 rounded-full origin-top"
+                      style={{ 
+                        animation: isSimulatingWalk ? 'walkLegLeft 0.7s infinite alternate ease-in-out' : 'none',
+                        transformOrigin: 'top center'
+                      }}
+                    />
+                    {/* Right Leg */}
+                    <div 
+                      className="w-1.5 h-7 bg-emerald-450 rounded-full origin-top"
+                      style={{ 
+                        animation: isSimulatingWalk ? 'walkLegRight 0.7s infinite alternate ease-in-out' : 'none',
+                        transformOrigin: 'top center'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Status text HUD */}
+                <div className="text-[10px] text-gray-400 font-bold bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm z-10">
+                  {isSimulatingWalk ? 'Walking session active... 🚶' : 'Simulator paused ⏸️'}
+                </div>
+              </div>
+              
+              {/* Right Column: Walk Stats & Action Toggles */}
+              <div className="space-y-4 text-left">
+                <div>
+                  <h4 className="text-xs font-black text-gray-800 dark:text-white uppercase flex items-center gap-1.5">
+                    🚶 Steps Pedometer HUD
+                  </h4>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-1 leading-relaxed">
+                    Simulate dynamic step counts in real-time. Turn on the switch to naturally walk step-by-step and automatically fulfill daily step targets!
+                  </p>
+                </div>
+
+                {/* Step Stats details grid */}
+                <div className="space-y-2.5">
+                  <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                    <span>Active Session Steps</span>
+                    <span className="text-emerald-500 font-extrabold">+{sessionSteps} steps</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                    <span>Estimated Distance</span>
+                    <span className="text-teal-500 font-extrabold">{(sessionSteps * 0.00075).toFixed(3)} km</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-gray-400 font-bold">
+                    <span>Est. Calories Burned</span>
+                    <span className="text-purple-500 font-extrabold">{(sessionSteps * 0.04).toFixed(1)} kcal</span>
+                  </div>
+                </div>
+
+                {/* Start/Stop simulation button */}
+                <button
+                  onClick={toggleWalkSimulation}
+                  className={`w-full py-2 rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 transform hover:scale-[1.02] ${
+                    isSimulatingWalk 
+                      ? 'bg-red-500 hover:bg-red-650 text-white shadow-red-500/10' 
+                      : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-emerald-500/10'
+                  }`}
+                >
+                  {isSimulatingWalk ? (
+                    <>⏸️ Pause Walk Simulation</>
+                  ) : (
+                    <>▶️ Start Walk Simulator</>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* ✨ Daily Gratitude Bubbles */}
+            <div className="border-t border-gray-100 dark:border-gray-800 pt-6 mt-4 grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+              {/* Left Column: Canvas display area */}
+              <div className="md:col-span-2 relative bg-gray-950 dark:bg-gray-950 rounded-2xl border border-gray-800 p-2 overflow-hidden h-[180px] flex items-center justify-center">
+                <canvas 
+                  id="gratitudeCanvas" 
+                  onClick={handleGratitudeCanvasClick}
+                  className="w-full h-full block cursor-pointer" 
+                />
+                
+                {/* Floating message overlay if a bubble is popped */}
+                {showGratitudeText && (
+                  <div className="absolute inset-x-4 bottom-4 p-3 bg-white/10 dark:bg-black/45 border border-white/20 rounded-xl backdrop-blur-md shadow-lg text-center animate-slide-up z-20 pointer-events-none">
+                    <p className="text-xs font-black text-white">✨ Today I am Grateful For:</p>
+                    <p className="text-[11px] font-semibold text-emerald-350 dark:text-emerald-400 mt-1 italic">"{showGratitudeText}"</p>
+                  </div>
+                )}
+                
+                <div className="absolute top-2.5 left-3 bg-black/55 text-[8px] font-bold text-teal-400 px-2 py-0.5 rounded-full uppercase tracking-wider pointer-events-none select-none">
+                  Gratitude Bubbles 🫧
+                </div>
+                <div className="absolute top-2.5 right-3 text-[8px] text-white/55 bg-black/45 px-2 py-0.5 rounded-full pointer-events-none select-none">
+                  Tap bubble to reveal notes
+                </div>
+              </div>
+              
+              {/* Right Column: Input field & Action button */}
+              <div className="space-y-3.5 text-left">
+                <div>
+                  <h4 className="text-xs font-black text-gray-800 dark:text-white uppercase flex items-center gap-1.5">
+                    ✨ Gratitude Bubbles
+                  </h4>
+                  <p className="text-[10px] text-gray-400 font-semibold mt-1 leading-relaxed">
+                    Formulate a positive thought or gratitude, then click Launch. Watch it join your aura as a glowing floating bubble!
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Today I am grateful for..."
+                    value={gratitudeText}
+                    onChange={(e) => setGratitudeText(e.target.value)}
+                    maxLength={100}
+                    className="w-full px-3 py-1.5 border border-gray-200 dark:border-gray-800 rounded-xl bg-white dark:bg-gray-900 text-gray-800 dark:text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-semibold"
+                  />
+                  <button
+                    onClick={handleLaunchGratitude}
+                    disabled={!gratitudeText.trim()}
+                    className="w-full py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-[10px] shadow-md shadow-blue-500/10 transition-all active:scale-95 transform hover:scale-[1.01]"
+                  >
+                    Launch Bubble 🫧
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
